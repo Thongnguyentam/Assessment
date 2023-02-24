@@ -3,7 +3,6 @@ author: "Thong Nguyen"
 title: "Fetch Assessment"
 output: html_document
 date: "2023-02-21"
-note: This is R Markdown file, using multiple and souce scripts, libraries: tidyverse, lubridate, scales, modelr, viridis.R, ggprob.R
 ---
 
 ```{r setup, include=FALSE}
@@ -17,37 +16,6 @@ source("../scripts/viridis.R")
 source("../scripts/ggprob.R")
 ```
 
-```{r}
-# Create a graph object
-graph <- create_graph()
-
-# Define nodes
-node_names <- c("receipts", "receipt_item")
-
-# Add nodes to the graph
-graph %>% 
-  add_nodes(nodes = node_names)
-
-# Define edges
-edge_labels <- c("ID", "ID")
-
-# Add edges to the graph
-graph %>% 
-  add_edges(from = node_names[1], to = node_names[2], 
-            rel = "one-to-many", label = edge_labels[1]) %>%
-  add_edges(from = node_names[2], to = node_names[1], 
-            rel = "many-to-one", label = edge_labels[2])
-
-# Set node shapes and colors
-graph %>% 
-  add_node_attrs(node_attrs = "shape = circle", node_ids = node_names[1]) %>%
-  add_node_attrs(node_attrs = "shape = rectangle", node_ids = node_names[2]) %>%
-  add_node_attrs(node_attrs = "style = filled, fillcolor = lightblue", node_ids = node_names[1]) %>%
-  add_node_attrs(node_attrs = "style = filled, fillcolor = lightgrey", node_ids = node_names[2])
-
-# Render the graph
-render_graph(graph)
-```
 
 ```{r, include=FALSE}
 users = read_csv("users.csv")
@@ -71,13 +39,49 @@ These are data created by joining 'receipt_items.csv' and 'receipts.csv' based o
 - "NEEDS_FETCH_REVIEW" indicates whether the receipt item needs to be reviewed, which can be useful for identifying potential errors or issues with individual purchases.  
 - "QUANTITY_PURCHASED.x":provide insights on the quantity of the purchased item, which can be useful for analyzing sales trends by product or product category and identifying popular package sizes.  
 
-```{r}
-cu =receip_items %>% rename('ID' ='REWARDS_RECEIPT_ID')
-receipts = receipts %>% 
-  inner_join(cu, by= 'ID')
-receipts
-```
+```{r, fig.width= 10, fig.height=8, echo = FALSE}
+# Create a data frame for each table's fields and joinable keys
+receipts_df <- data.frame(table = "receipt",
+                           fields = colnames(receipts))
 
+receipts_items_df <- data.frame(table = "receipt_items",
+                                fields = colnames(receip_items))
+brands_df <- data.frame(table = 'brands',
+                        fields = colnames(brands))
+users_df <- data.frame(table = 'users',
+                    fields = colnames(users))
+
+# Combine the data frames
+combined_df <- rbind(receipts_df, receipts_items_df, brands_df, users_df)
+combined_df = combined_df %>% group_by(fields) %>% mutate(num = n())
+# Create the diagram
+ggplot(combined_df, aes(x = table, y = fields)) +
+  geom_tile(color = "white", size = 0.5, aes(fill = num)) +
+  theme_light() +
+  theme(axis.text.x = element_text(angle = 90, hjust = 1),
+        legend.position = "none") +
+  labs(x = NULL, y = NULL,
+       title = "Simplified, Structured, Relational Diagram",
+       subtitle = "Data Model for Receipts and Receipt Items in a Data Warehouse")
+```
+- This graph shows the relationship between 4 datasets, showing each table’s fields and the joinable keys. We can see that all 4 of datasets have ID columns, suggesting the ID can be used to joined these datasets with other valuable features in all datasets. Besides, receipt and receipt_items also have Modify_date columns in common, and this value can be the same date of receipts modified. Besides, brands and receipt_items also share the same "BARCODE" and "BRAND CODE." In the following, I just have 2 relational datasets, one is the combination of 'receipt_items' and 'recepts' (since brands and users have no common ID with each other and with those datasets), and the combination of brands and receipt_items based on 'BARCODE' and 'BRAND_CODE'.
+
+```{r, echo = FALSE}
+receip_items =receip_items %>% rename('ID' ='REWARDS_RECEIPT_ID')
+receipts_new = receipts %>% 
+  inner_join(receip_items, by= 'ID')
+receipts_new
+```
+```{r, echo = FALSE}
+brands = brands %>% 
+  mutate(BARCODE = as.character(BARCODE))
+brands = brands %>% 
+  inner_join(receip_items, by = c('BARCODE', 'BRAND_CODE')) 
+brands
+```
+> What is the time of the day with highest number of receipts and total items ?
+
+- As we can see, the number of items and receipts are mostly purchased during afternoon (from 12:00 - 18:00) with 27189 receipts and 251739 total items, followed by morning period (from 6:00 - to 12: 00) with 17253 receipts and 131400 total items 131400, doubling the other two period of time in the day 
 
 ```{r, echo = FALSE}
 rec =  receipts %>% 
@@ -107,24 +111,37 @@ rec_graph
 ```{r, echo = FALSE}
 rec_graph = ggplot(rec, aes(x = period, y = total_items)) +
   geom_col(fill = 'red') +
-  ggtitle('Number of receipts by each period of time of the day')+
-  xlab('Number of receipts') + 
+  ggtitle('Number of items by each period of time of the day')+
+  xlab('Number of items') + 
   ylab('period of time of the day')
 rec_graph
 ```
 
+> What is the stores with the highest number of receipts?
+
+- We can see that Walmart, Amazon, Target, Dunkin Donut are the most popular store, standing at rougly 6900, 2800, 1800, 1780, respectively, and suggesting that their service in the market are in good implementation  
+
 ```{r, echo = FALSE}
-receipts %>% 
+highest_number_receipts = receipts %>% 
   drop_na(STORE_NAME) %>% 
   group_by(STORE_NAME) %>% 
   summarize(number_of_store = n()) %>% 
-  arrange(desc(number_of_store))
+  arrange(desc(number_of_store)) %>% 
+  slice_max(number_of_store, n= 10)
+highest_number_receipts
 ```
 
-## Users data
 ```{r, echo = FALSE}
-colnames(receipts)
+ggplot(highest_number_receipts, aes(x = STORE_NAME, y = number_of_store))+
+  geom_col(fill = 'orange') +
+  theme(axis.text.x = element_text(angle = 60, hjust = 1))+
+  xlab('Store Name') +
+  ylab('Number of receipts')+
+  ggtitle('Number of receipts according to stores')
+  
 ```
+
+> What users data may suggest ?
 
 ```{r, echo = FALSE}
 u1 = users %>% 
@@ -138,6 +155,8 @@ u1 = users %>%
 u1
 
 ```
+- As we can see most of the users sign up by Apple and Email. Regarding to genders, in these data, thosse who prefer no to say registers Apple the most, while female tend to use Facebook to sign up. Therefore, business stakeholder can put more advertises targeting female customers on Facebook.
+
 ```{r, echo = FALSE}
 u1_plot = ggplot(u1, aes(x = SIGN_UP_SOURCE, y = number_of_signups))+
   geom_col(aes(fill = GENDER), position = position_dodge2("single")) +
@@ -154,6 +173,8 @@ u1_plot2 = ggplot(u1, aes(x = SIGN_UP_SOURCE, y = number_of_signups))+
 u1_plot2
 ```
 
+>Which state has the highest proportion of sign-ups?
+
 ```{r, echo = FALSE}
 u2 = users %>% 
   drop_na(SIGN_UP_PLATFORM) %>% 
@@ -164,7 +185,8 @@ u2 = users %>%
   mutate(proportion = number_of_signups_state/sum(number_of_signups_state))
 u2
 ```
-- As we can see, New York has the most number of sign-ups, followed by Florida and California. This suggest that these 3 regions are our potential target customers, accounting for 10%, 8%, and 7%, respectively.
+- As we can see, New York has the most number of sign-ups, followed by Florida and California. This suggest that these 3 regions are our potential target customers, accounting for 10%, 8%, and 7%, respectively. Therefore, businesses should target more on these potential market.  
+
 ```{r, echo = FALSE}
 u2_modified_above = u2 %>% 
   subset(number_of_signups_state >= 6) %>% select(-proportion)
@@ -178,31 +200,23 @@ ggplot(u2_final, aes(x = '', y= number_of_signups_state, fill = STATE))+
   ggtitle('Proportion of sign-up by states') + xlab(NULL) + ylab(NULL)
 ```
 
+> Which month has the most sign-ups?
+
+- As we can see, the last four months of the years generally has higher number of sign-ups. Therefore, the business must focus on this period of year  
+
 ```{r, echo = FALSE}
 u3 = users %>% 
-  mutate(month = month(CREATED_DATE)) %>% 
+  mutate(month = month(CREATED_DATE, label = TRUE)) %>% 
   group_by(month) %>% 
-  summarise(num = n()) %>% 
-  arrange(desc(num))
+  summarise(num = n())
 u3
 
 u3_1 = ggplot(u3, aes(x = month, y = num)) +
-  geom_line(color = 'blue')+
+  geom_col(fill = 'blue')+
   xlab("Month") + ylab("Number of sign-ups")+
   ggtitle("Month vs The number of sign-ups")
 u3_1
 ```
 
-```{r, echo = FALSE}
-brands
-```
-
-
-```{r, echo = FALSE}
-brands %>% 
-  drop_na(BRAND_CODE) %>% 
-  group_by(CATEGORY) %>% 
-  summarize(n = n())
-```
 
 
