@@ -1,0 +1,208 @@
+---
+author: "Thong Nguyen"
+title: "Fetch Assessment"
+output: html_document
+date: "2023-02-21"
+note: This is R Markdown file, using multiple and souce scripts, libraries: tidyverse, lubridate, scales, modelr, viridis.R, ggprob.R
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE, message=FALSE, fig.height = 4)
+library(tidyverse)
+library(lubridate)
+library(scales)
+library(modelr)
+library(DiagrammeR)
+source("../scripts/viridis.R")
+source("../scripts/ggprob.R")
+```
+
+```{r}
+# Create a graph object
+graph <- create_graph()
+
+# Define nodes
+node_names <- c("receipts", "receipt_item")
+
+# Add nodes to the graph
+graph %>% 
+  add_nodes(nodes = node_names)
+
+# Define edges
+edge_labels <- c("ID", "ID")
+
+# Add edges to the graph
+graph %>% 
+  add_edges(from = node_names[1], to = node_names[2], 
+            rel = "one-to-many", label = edge_labels[1]) %>%
+  add_edges(from = node_names[2], to = node_names[1], 
+            rel = "many-to-one", label = edge_labels[2])
+
+# Set node shapes and colors
+graph %>% 
+  add_node_attrs(node_attrs = "shape = circle", node_ids = node_names[1]) %>%
+  add_node_attrs(node_attrs = "shape = rectangle", node_ids = node_names[2]) %>%
+  add_node_attrs(node_attrs = "style = filled, fillcolor = lightblue", node_ids = node_names[1]) %>%
+  add_node_attrs(node_attrs = "style = filled, fillcolor = lightgrey", node_ids = node_names[2])
+
+# Render the graph
+render_graph(graph)
+```
+
+```{r, include=FALSE}
+users = read_csv("users.csv")
+receipts = read_csv("receipts.csv")
+brands = read_csv("brands.csv")
+receip_items = read_csv("receipt_items.csv")
+```
+## Introduction
+The data of warehouse consists of 4 small datasets, showing different categories regard to receipts and other information of the products such as time, brands, stores that the products belong to. From these datasets, we can provide numerous insights on the pattern of customers' purchase pattern in order to allocate products to different stores, or different sites, area, in order to maximize our profit. The following data and charts are supporting some reasonable inference that we can make from the data.
+
+** Relational dataset **
+These are data created by joining 'receipt_items.csv' and 'receipts.csv' based on user ID, suggesting these datasets have different features come from one receipt, some of which that can be helpful for our company might be: 
+
+- "ID": represents a unique identifier for each receipt item, which can be useful for identifying and tracking individual purchases. 
+- "STORE_NAME": provides insights on where the purchase was made, which can be useful for analyzing sales by store location or identifying popular shopping destinations.  
+- "PURCHASE_TIME": provides insights on the time of purchase, which can be useful for analyzing sales trends by time of day or identifying peak shopping hours.  
+- "TOTAL_SPENT": provides insights on the total amount spent on each purchase, which can be useful for analyzing sales trends over time, identifying popular products or product categories, and understanding customer behavior.  
+- "USER_ID": provides information on the user who made the purchase, which can be useful for identifying individual purchasing patterns or analyzing customer demographics.  
+- "BARCODE.x":  provides insights on the barcode of the purchased item, which can be useful for identifying individual products and analyzing sales trends by product or product category.   
+- "ITEM_INDEX.x": represents the index of the purchased item in the receipt, which can be useful for analyzing the order in which items were purchased and identifying popular item combinations.
+- "NEEDS_FETCH_REVIEW" indicates whether the receipt item needs to be reviewed, which can be useful for identifying potential errors or issues with individual purchases.  
+- "QUANTITY_PURCHASED.x":provide insights on the quantity of the purchased item, which can be useful for analyzing sales trends by product or product category and identifying popular package sizes.  
+
+```{r}
+cu =receip_items %>% rename('ID' ='REWARDS_RECEIPT_ID')
+receipts = receipts %>% 
+  inner_join(cu, by= 'ID')
+receipts
+```
+
+
+```{r, echo = FALSE}
+rec =  receipts %>% 
+  drop_na(PURCHASE_TIME) %>% 
+  mutate(hour = as.integer(str_extract(PURCHASE_TIME, '\\d+(?=:)'))) %>% 
+  mutate(period = case_when(
+    hour < 6 ~ str_c('Overnight'),
+    hour < 12 ~ str_c('Morning'),
+    hour < 18 ~ str_c('Afternoon'),
+    hour < 24 ~ str_c('Evening')
+  )) %>% 
+  group_by(period) %>% 
+  summarize(number_of_re_byperiod = n(), total_items = sum(PURCHASED_ITEM_COUNT)) %>% 
+  arrange(desc(number_of_re_byperiod))
+rec
+```
+
+```{r, echo = FALSE}
+rec_graph = ggplot(rec, aes(x = period, y = number_of_re_byperiod)) +
+  geom_col(fill = 'blue') +
+  ggtitle('Number of receipts by each period of time of the day')+
+  xlab('Number of receipts') + 
+  ylab('period of time of the day')
+rec_graph
+```
+
+```{r, echo = FALSE}
+rec_graph = ggplot(rec, aes(x = period, y = total_items)) +
+  geom_col(fill = 'red') +
+  ggtitle('Number of receipts by each period of time of the day')+
+  xlab('Number of receipts') + 
+  ylab('period of time of the day')
+rec_graph
+```
+
+```{r, echo = FALSE}
+receipts %>% 
+  drop_na(STORE_NAME) %>% 
+  group_by(STORE_NAME) %>% 
+  summarize(number_of_store = n()) %>% 
+  arrange(desc(number_of_store))
+```
+
+## Users data
+```{r, echo = FALSE}
+colnames(receipts)
+```
+
+```{r, echo = FALSE}
+u1 = users %>% 
+  drop_na(SIGN_UP_PLATFORM) %>% 
+  group_by(GENDER, SIGN_UP_SOURCE) %>% 
+  summarize (number_of_signups = n()) %>% 
+  ungroup() %>% 
+  group_by(SIGN_UP_SOURCE) %>% 
+  mutate(number_by_source = sum(number_of_signups)) %>% 
+  arrange(desc(number_by_source))
+u1
+
+```
+```{r, echo = FALSE}
+u1_plot = ggplot(u1, aes(x = SIGN_UP_SOURCE, y = number_of_signups))+
+  geom_col(aes(fill = GENDER), position = position_dodge2("single")) +
+  xlab("Sign_up_source") + ylab("Number of Sign-ups") +
+  ggtitle('Number of sign-up according sign-up-souce and gender')
+u1_plot
+```
+
+```{r, echo = FALSE}
+u1_plot2 = ggplot(u1, aes(x = SIGN_UP_SOURCE, y = number_of_signups))+
+  geom_col(aes(fill = GENDER)) +
+  xlab("Sign_up_source") + ylab("Number of Sign-ups")+
+  ggtitle('Number of sign-up according sign-up-souce')
+u1_plot2
+```
+
+```{r, echo = FALSE}
+u2 = users %>% 
+  drop_na(SIGN_UP_PLATFORM) %>% 
+  group_by(STATE) %>% 
+  summarize(number_of_signups_state = n()) %>% 
+  arrange(desc(number_of_signups_state)) %>% 
+  ungroup() %>% 
+  mutate(proportion = number_of_signups_state/sum(number_of_signups_state))
+u2
+```
+- As we can see, New York has the most number of sign-ups, followed by Florida and California. This suggest that these 3 regions are our potential target customers, accounting for 10%, 8%, and 7%, respectively.
+```{r, echo = FALSE}
+u2_modified_above = u2 %>% 
+  subset(number_of_signups_state >= 6) %>% select(-proportion)
+u2_modified_below = u2 %>% 
+  subset(number_of_signups_state < 6) %>% 
+  summarize(number_of_signups_state = sum(number_of_signups_state)) %>% mutate(STATE = 'others') %>% relocate(STATE, number_of_signups_state)
+u2_final = rbind(u2_modified_above, u2_modified_below)
+ggplot(u2_final, aes(x = '', y= number_of_signups_state, fill = STATE))+
+  geom_col()+
+  coord_polar(theta = 'y')+
+  ggtitle('Proportion of sign-up by states') + xlab(NULL) + ylab(NULL)
+```
+
+```{r, echo = FALSE}
+u3 = users %>% 
+  mutate(month = month(CREATED_DATE)) %>% 
+  group_by(month) %>% 
+  summarise(num = n()) %>% 
+  arrange(desc(num))
+u3
+
+u3_1 = ggplot(u3, aes(x = month, y = num)) +
+  geom_line(color = 'blue')+
+  xlab("Month") + ylab("Number of sign-ups")+
+  ggtitle("Month vs The number of sign-ups")
+u3_1
+```
+
+```{r, echo = FALSE}
+brands
+```
+
+
+```{r, echo = FALSE}
+brands %>% 
+  drop_na(BRAND_CODE) %>% 
+  group_by(CATEGORY) %>% 
+  summarize(n = n())
+```
+
+
