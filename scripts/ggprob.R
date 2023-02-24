@@ -363,3 +363,4 @@ gbeta = function(alpha=1,beta=1,a=NULL,b=NULL,color="blue",
     ggtitle(paste("Beta(",alpha,",",beta,")"))
   return ( g )
 }
+

@@ -23,6 +23,7 @@ receipts = read_csv("receipts.csv")
 brands = read_csv("brands.csv")
 receip_items = read_csv("receipt_items.csv")
 ```
+
 ## Introduction
 The data of warehouse consists of 4 small datasets, showing different categories regard to receipts and other information of the products such as time, brands, stores that the products belong to. From these datasets, we can provide numerous insights on the pattern of customers' purchase pattern in order to allocate products to different stores, or different sites, area, in order to maximize our profit. The following data and charts are supporting some reasonable inference that we can make from the data.
 
@@ -64,7 +65,12 @@ ggplot(combined_df, aes(x = table, y = fields)) +
        title = "Simplified, Structured, Relational Diagram",
        subtitle = "Data Model for Receipts and Receipt Items in a Data Warehouse")
 ```
-- This graph shows the relationship between 4 datasets, showing each table’s fields and the joinable keys. We can see that all 4 of datasets have ID columns, suggesting the ID can be used to joined these datasets with other valuable features in all datasets. Besides, receipt and receipt_items also have Modify_date columns in common, and this value can be the same date of receipts modified. Besides, brands and receipt_items also share the same "BARCODE" and "BRAND CODE." In the following, I just have 2 relational datasets, one is the combination of 'receipt_items' and 'recepts' (since brands and users have no common ID with each other and with those datasets), and the combination of brands and receipt_items based on 'BARCODE' and 'BRAND_CODE'.
+- This graph shows the relationship between 4 datasets, showing each table’s fields and the joinable keys. We can see that all 4 of datasets have ID columns, suggesting the ID can be used to joined these datasets with other valuable features in all datasets. Besides, receipt and receipt_items also have Modify_date columns in common, and this value can be the same date of receipts modified. Besides, brands and receipt_items also share the same "BARCODE" and "BRAND CODE." In the following, I just have 2 relational datasets, one is the combination of 'receipt_items' and 'recepts' (since brands and users have no common ID with each other and with those datasets), and the combination of brands and receipt_items based on 'BARCODE' and 'BRAND_CODE'.  
+
+
+## Receipts & Receipt_items
+
+- Overall, this dataset contains information about customer purchases, including the store location, purchase date and time, items purchased, and rewards points earned. However, the specifics of the information contained in the dataset will depend on the actual data. This dataset also appears to be related to customer purchases, specifically receipts. Columns such as "STORE_NAME," "PURCHASE_DATE", "PURCHASE_TIME", and "TOTAL_SPENT" suggest information about the store where the purchase was made, the date and time of the purchase, and the total amount spent. Other columns, such as "USER_ID" and "USER_VIEWED," contain information about individual customers and their interactions with the receipt data. There are also columns related to the items purchased, including "DESCRIPTION," "BARCODE," "BRAND_CODE," "QUANTITY_PURCHASED," and "TOTAL_FINAL_PRICE." Additionally, there are columns related to rewards points earned, such as "POINTS_EARNED" and "REWARDS_GROUP."  
 
 ```{r, echo = FALSE}
 receip_items =receip_items %>% rename('ID' ='REWARDS_RECEIPT_ID')
@@ -141,6 +147,45 @@ ggplot(highest_number_receipts, aes(x = STORE_NAME, y = number_of_store))+
   
 ```
 
+> Interesting fact: All of the top 5 with the highest number of receipts witnessed an increase in the number, with that of WALMART is the most significant
+
+```{r, echo = FALSE}
+receipts = receipts %>% 
+  drop_na(DATE_SCANNED) %>% 
+  mutate(month = as.numeric(str_remove(str_extract(DATE_SCANNED, '-(\\d{2})'), "-")),
+         year = as.numeric(str_extract(DATE_SCANNED, '(\\d{4})')))
+
+thoughout = receipts %>%
+  drop_na(year,STORE_NAME) %>% 
+  filter(year == 2021 | year == 2022) %>% 
+  group_by(year, STORE_NAME) %>% 
+  summarize(number = n()) %>% 
+  slice_max(number, n = 5)
+
+ggplot(thoughout, aes(y = number, x = year))+
+  geom_line(aes(color = STORE_NAME))
+```
+
+> What are the months with the highest scan?
+
+- As we can see, the number of scan increased thoughout each month, with months in 2022 is larger than that of the same month of 2021  
+
+```{r, echo = FALSE}
+number_of_scan_by_month = receipts %>% 
+  group_by(year, month) %>% 
+  summarise(number = n())
+number_of_scan_by_month
+```
+
+```{r, echo = FALSE}
+ggplot(number_of_scan_by_month, aes(x = month, y = number))+
+  geom_col(aes(fill = year)) +
+  ggtitle('Number of scan of each month by year')+
+  scale_x_continuous(breaks = c(1,3,5,7,9,11))+
+  facet_wrap(vars(year))+
+  xlab('Month') + ylab('Number of scanned')
+```
+
 > What users data may suggest ?
 
 ```{r, echo = FALSE}
@@ -155,7 +200,7 @@ u1 = users %>%
 u1
 
 ```
-- As we can see most of the users sign up by Apple and Email. Regarding to genders, in these data, thosse who prefer no to say registers Apple the most, while female tend to use Facebook to sign up. Therefore, business stakeholder can put more advertises targeting female customers on Facebook.
+- As we can see most of the users sign up by Apple and Email. Regarding to genders, in these data, thosse who prefer no to say registers Apple the most, while female tend to use Facebook to sign up. Therefore, business stakeholder can put more advertises targeting female customers on Facebook.  
 
 ```{r, echo = FALSE}
 u1_plot = ggplot(u1, aes(x = SIGN_UP_SOURCE, y = number_of_signups))+
@@ -173,7 +218,7 @@ u1_plot2 = ggplot(u1, aes(x = SIGN_UP_SOURCE, y = number_of_signups))+
 u1_plot2
 ```
 
->Which state has the highest proportion of sign-ups?
+> Which state has the highest proportion of sign-ups?
 
 ```{r, echo = FALSE}
 u2 = users %>% 
@@ -218,5 +263,38 @@ u3_1 = ggplot(u3, aes(x = month, y = num)) +
 u3_1
 ```
 
+## Brands
 
+The dataset contains information about customer purchases, particularly regarding rewards programs. There are columns related to the item purchased, such as "DESCRIPTION" and "TOTAL_FINAL_PRICE," as well as columns related to rewards points earned, such as "POINTS_EARNED" and "REWARDS_GROUP." There are also columns related to the brand and category of the item, such as "BRAND_CODE" and "CATEGORY_CODE." The dataset may also contain information about multiple purchases made by the same customer, as there are columns related to "REWARDS_RECEIPT_ITEM_ID" and "ITEM_INDEX". Overall, we can assume that the dataset contains information about customer purchases, rewards points earned, and information about the items purchased, including brand and category. 
 
+> What is the most popular name of beverage brands?
+
+- As we can see, Dole Drinks is the most popular drink among beverages, followed by pepsi, which is not equal to the half of the number of Dole Drinks.    
+
+```{r, fig.width= 8, echo = FALSE}
+bev = brands %>% 
+  filter(CATEGORY == 'Beverages') %>% 
+  group_by(NAME) %>% 
+  summarize(number = n()) %>% 
+  slice_max(number, n= 7)
+ggplot(bev, aes(x = NAME, y = number))+
+  geom_col(fill = 'green')+
+  ggtitle('Number of the top 7 beverage brands')+
+  xlab('Brand name') + ylab('Number')
+```
+
+> What are the most expensive item of PEPPERIDGE FARM? 
+
+- As we can see from the table, the most expensive items from PEPPERIDGE FARM are Pepperidge Farm Cinnamon Swirl Bread, PF bread, Chocolate cake, and PF TOP SLICE HOT DOG BUN.  
+
+```{r, echo = FALSE}
+expensive = brands %>% 
+  filter(BRAND_CODE == 'PEPPERIDGE FARM') %>% 
+  slice_max(TOTAL_FINAL_PRICE, n= 5) %>% 
+  distinct(ORIGINAL_RECEIPT_ITEM_TEXT, TOTAL_FINAL_PRICE)
+expensive
+```
+
+```{r}
+colnames(brands)
+```
